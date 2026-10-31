@@ -15,7 +15,7 @@ LD := ld.lld
 PKG := $(TOOLCHAIN)/bin/linux
 CFILES := $(wildcard $(SRCDIR)/*.c)
 OBJS := $(patsubst $(SRCDIR)/%.c,$(INTDIR)/%.o,$(CFILES))
-CFLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -c -isysroot $(TOOLCHAIN) -isystem $(TOOLCHAIN)/include
+CFLAGS := --target=x86_64-pc-freebsd12-elf -D__PS4__ -D__OPENORBIS__ -D__ORBIS__ -fPIC -funwind-tables -c -isysroot $(TOOLCHAIN) -isystem $(TOOLCHAIN)/include
 LDFLAGS := -m elf_x86_64 -pie --script $(TOOLCHAIN)/link.x --eh-frame-hdr -L$(TOOLCHAIN)/lib $(CORE_LIBS) --as-needed $(EXTRA_LIBS) --no-as-needed $(TOOLCHAIN)/lib/crt1.o
 ASSETS := $(shell find assets -type f 2>/dev/null | LC_ALL=C sort)
 MODULES := $(shell find sce_module -type f 2>/dev/null | LC_ALL=C sort)
