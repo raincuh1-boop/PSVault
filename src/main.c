@@ -41,7 +41,7 @@ static int game_count=0;
 static int category_count=0, category_filter=-1;
 static int filtered[MAX_GAMES], filtered_count=0;
 static int queue_count=0, selected=0, qselected=0, detail_game=-1;
-static int page=HOME, running=1, search_open=0, keyboard_cursor=0;
+static int page=HOME, running=1, search_open=0, keyboard_cursor=0, download_cancel_requested=0;
 static char search_text[64]="";
 static SDL_Window *win;
 static SDL_Renderer *ren;
@@ -99,12 +99,15 @@ static int net_init(void){
  http_ctx=sceHttpInit(net_pool,ssl_ctx,LIBHTTP_POOLSIZE);return http_ctx<0?-1:0;
 }
 static void close_http(int t,int c,int q){if(q>0)sceHttpDeleteRequest(q);if(c>0)sceHttpDeleteConnection(c);if(t>0)sceHttpDeleteTemplate(t);}
-static int open_http(const char*u,int*t,int*c,int*q){
+static int open_http(const char*u,int*t,int*c,int*q,uint64_t offset,int32_t *status_out){
  *t=sceHttpCreateTemplate(http_ctx,UA,ORBIS_HTTP_VERSION_1_1,1);if(*t<0)return -1;
  *c=sceHttpCreateConnectionWithURL(*t,u,1);if(*c<0)return -1;
  *q=sceHttpCreateRequestWithURL(*c,ORBIS_METHOD_GET,u,0);if(*q<0)return -1;
+ if(sceHttpAddRequestHeader(*q,"Accept-Encoding","identity",0)<0)return -1;
+ if(offset>0){char range[64];snprintf(range,sizeof(range),"bytes=%llu-",(unsigned long long)offset);if(sceHttpAddRequestHeader(*q,"Range",range,0)<0)return -1;}
  if(sceHttpSendRequest(*q,NULL,0)<0)return -1;
- int32_t s=0;if(sceHttpGetStatusCode(*q,&s)<0||s<200||s>=300)return -1;return 0;
+ int32_t s=0;if(sceHttpGetStatusCode(*q,&s)<0||s<200||s>=300)return -1;
+ if(status_out)*status_out=s;return 0;
 }
 static void parse_catalog(char *buf){
  game_count=0;char*save=0;
@@ -122,7 +125,7 @@ static void parse_catalog(char *buf){
 }
 static int refresh_catalog(void){
  int t=0,c=0,q=0,ok=-1;char buf[65536];size_t n=0;
- if(http_ctx>0&&open_http(CATALOG_URL,&t,&c,&q)==0){
+ if(http_ctx>0&&open_http(CATALOG_URL,&t,&c,&q,0,NULL)==0){
   while(n<sizeof(buf)-1){int k=sceHttpReadData(q,buf+n,(unsigned int)(sizeof(buf)-1-n));if(k<0)break;if(!k){ok=0;break;}n+=(size_t)k;}
   close_http(t,c,q);t=c=q=0;
   if(ok==0){buf[n]=0;FILE*f=fopen(DATA_DIR "/catalog.tsv","wb");if(f){fwrite(buf,1,n,f);fclose(f);}parse_catalog(buf);return 0;}
@@ -142,6 +145,7 @@ static void save_queue(void){
  }
  fclose(f);
 }
+static void part_path(const Item*d,char*out,size_t n){snprintf(out,n,"%s.part",d->path);}
 static void load_queue(void){
  FILE*f=fopen(QUEUE_FILE,"rb");if(!f)return;char line[1200];queue_count=0;
  while(fgets(line,sizeof(line),f)&&queue_count<MAX_QUEUE){
@@ -150,9 +154,10 @@ static void load_queue(void){
   int game=-1;for(int i=0;i<game_count;i++)if(!strcmp(games[i].url,u)){game=i;break;}if(game<0)continue;
   Item*d=&queue[queue_count++];memset(d,0,sizeof(*d));d->game=game;d->state=atoi(a);d->got=(uint64_t)strtoull(b,NULL,10);d->total=(uint64_t)strtoull(c,NULL,10);
   if(d->state<QUEUED||d->state>FAILED||d->state==ACTIVE)d->state=FAILED;
-  make_path(d);
-  struct stat st;if(d->state==DONE&&stat(d->path,&st)!=0)d->state=QUEUED;
-  if(d->state!=DONE){d->got=0;d->total=0;}
+  make_path(d);char partial[320];part_path(d,partial,sizeof(partial));struct stat st;
+  if(d->state==DONE){if(stat(d->path,&st)!=0)d->state=QUEUED;}
+  else if(stat(partial,&st)==0&&st.st_size>0&&(uint64_t)st.st_size<=d->total){d->got=(uint64_t)st.st_size;d->state=FAILED;}
+  else {d->got=0;if(d->state!=QUEUED)d->state=FAILED;}
  }
  fclose(f);if(qselected>=queue_count)qselected=queue_count?queue_count-1:0;
 }
@@ -236,23 +241,48 @@ static void update_progress(Item*d){
  char s[160];snprintf(s,sizeof(s),"%llu / %llu BYTES",(unsigned long long)d->got,(unsigned long long)d->total);small(100,520,s);
  snprintf(s,sizeof(s),"SPEED %.2f MB/S",d->speed/1048576.0);small(100,590,s);
  if(d->total&&d->speed>1){uint64_t left=(uint64_t)((double)(d->total-d->got)/d->speed);snprintf(s,sizeof(s),"TIME LEFT %llu MIN %llu SEC",(unsigned long long)(left/60),(unsigned long long)(left%60));small(100,660,s);}
- small(100,760,"KEEP PSVAULT OPEN DURING THE DOWNLOAD");SDL_RenderPresent(ren);
+ small(100,760,"CIRCLE TO PAUSE - PARTIAL FILE WILL BE KEPT FOR RESUME");SDL_RenderPresent(ren);
+}
+static void poll_download_controls(void){
+ SDL_Event e;while(SDL_PollEvent(&e)){
+  if(e.type==SDL_QUIT){running=0;download_cancel_requested=1;}
+  else if(e.type==SDL_KEYDOWN&&e.key.keysym.sym==SDLK_ESCAPE)download_cancel_requested=1;
+  else if(e.type==SDL_CONTROLLERBUTTONDOWN&&e.cbutton.button==SDL_CONTROLLER_BUTTON_B)download_cancel_requested=1;
+ }
 }
 static int download_item(Item*d){
- int t=0,c=0,q=0,ok=-1;mkdir(DATA_DIR,0777);d->state=ACTIVE;d->got=d->total=0;d->started_ms=SDL_GetTicks();d->speed=0;d->error[0]=0;save_queue();
- if(open_http(games[d->game].url,&t,&c,&q)<0){snprintf(d->error,sizeof(d->error),"HTTP REQUEST FAILED");goto out;}
- int type=0;uint64_t len=0;if(sceHttpGetResponseContentLength(q,&type,&len)==0&&type==ORBIS_HTTP_CONTENTLEN_EXIST)d->total=len;
- FILE*f=fopen(d->path,"wb");if(!f){snprintf(d->error,sizeof(d->error),"CANNOT WRITE TO DOWNLOAD FOLDER");goto out;}
- unsigned char b[65536];
- for(;;){int n=sceHttpReadData(q,b,sizeof(b));if(n<0){snprintf(d->error,sizeof(d->error),"CONNECTION INTERRUPTED");break;}if(!n){ok=0;break;}
+ int t=0,c=0,q=0,ok=-1,status=0,type=0;uint64_t len=0,offset=0,checkpoint=0;
+ char partial[320];mkdir(DATA_DIR,0777);make_path(d);part_path(d,partial,sizeof(partial));
+ struct stat st;if(stat(partial,&st)==0&&st.st_size>0)offset=(uint64_t)st.st_size;
+ if(d->total&&offset>d->total){remove(partial);offset=0;}
+ if(d->total&&offset==d->total){if(rename(partial,d->path)==0){d->got=d->total;d->state=DONE;save_queue();return 0;}remove(partial);offset=0;}
+ d->state=ACTIVE;d->got=offset;d->started_ms=SDL_GetTicks();d->speed=0;d->error[0]=0;download_cancel_requested=0;save_queue();
+ if(open_http(games[d->game].url,&t,&c,&q,offset,&status)<0){snprintf(d->error,sizeof(d->error),"HTTP REQUEST FAILED");goto out;}
+ if(offset>0&&status==200){
+  close_http(t,c,q);t=c=q=0;offset=0;d->got=0;d->total=0;
+  if(open_http(games[d->game].url,&t,&c,&q,0,&status)<0){snprintf(d->error,sizeof(d->error),"HTTP RESTART REQUEST FAILED");goto out;}
+ }
+ if(offset>0&&status!=206){snprintf(d->error,sizeof(d->error),"SERVER DOES NOT SUPPORT RANGE RESUME");goto out;}
+ if(sceHttpGetResponseContentLength(q,&type,&len)==0&&type==ORBIS_HTTP_CONTENTLEN_EXIST){
+  if(status==206)d->total=offset+len;else d->total=len;
+ }
+ FILE*f=fopen(partial,offset>0?"ab":"wb");if(!f){snprintf(d->error,sizeof(d->error),"CANNOT WRITE TO DOWNLOAD FOLDER");goto out;}
+ checkpoint=d->got+2*1024*1024;
+ for(;;){
+  poll_download_controls();if(download_cancel_requested){snprintf(d->error,sizeof(d->error),"PAUSED BY USER");break;}
+  int n=sceHttpReadData(q,b,sizeof(b));if(n<0){snprintf(d->error,sizeof(d->error),"CONNECTION INTERRUPTED");break;}if(!n){ok=0;break;}
   if(fwrite(b,1,(size_t)n,f)!=(size_t)n){snprintf(d->error,sizeof(d->error),"DISK WRITE FAILED");break;}
   d->got+=(uint64_t)n;update_progress(d);
+  if(d->got>=checkpoint){fflush(f);save_queue();checkpoint=d->got+2*1024*1024;}
  }
- fclose(f);if(ok==0&&d->total&&d->got!=d->total){ok=-1;snprintf(d->error,sizeof(d->error),"PACKAGE SIZE MISMATCH");}
- if(ok<0)remove(d->path);
-out:close_http(t,c,q);d->state=ok==0?DONE:FAILED;save_queue();return ok;
+ fflush(f);fclose(f);
+ if(ok==0&&d->total&&d->got!=d->total){ok=-1;snprintf(d->error,sizeof(d->error),"PACKAGE SIZE MISMATCH");}
+ if(ok==0){if(rename(partial,d->path)!=0){ok=-1;snprintf(d->error,sizeof(d->error),"COULD NOT FINALIZE PACKAGE FILE");}}
+out:close_http(t,c,q);d->state=ok==0?DONE:FAILED;
+ if(ok<0){struct stat ps;if(stat(partial,&ps)==0)d->got=(uint64_t)ps.st_size;}
+ save_queue();return ok;
 }
-static void start_queue(void){for(int i=0;i<queue_count&&running;i++)if(queue[i].state==QUEUED||queue[i].state==FAILED){download_item(&queue[i]);qselected=i;}}
+static void start_queue(void){for(int i=0;i<queue_count&&running;i++)if(queue[i].state==QUEUED||queue[i].state==FAILED){download_item(&queue[i]);qselected=i;if(download_cancel_requested)break;}}
 static void search_append(char c){size_t n=strlen(search_text);if(n<sizeof(search_text)-1){search_text[n]=c;search_text[n+1]=0;selected=0;build_filtered();}}
 static void search_delete(void){size_t n=strlen(search_text);if(n){search_text[n-1]=0;selected=0;build_filtered();}}
 static void keyboard_activate(void){
