@@ -145,6 +145,9 @@ static void make_path(Item*d){
 }
 static int validate_pkg(const char *path){
  FILE*f=fopen(path,"rb");if(!f)return 0;
+ if(fseek(f,0,SEEK_END)!=0){fclose(f);return 0;}
+ long size=ftell(f);if(size<0x1000L){fclose(f);return 0;}
+ rewind(f);
  unsigned char h[4];int ok=fread(h,1,sizeof(h),f)==sizeof(h);
  fclose(f);
  return ok&&h[0]==0x7f&&h[1]==0x43&&h[2]==0x4e&&h[3]==0x54;
