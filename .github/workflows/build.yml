@@ -7,8 +7,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # PkgTool.Core is a .NET utility. Invariant mode avoids requiring
-      # a matching ICU runtime on GitHub's rolling Ubuntu images.
       DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +19,7 @@ jobs:
           base="http://security.ubuntu.com/ubuntu/pool/main/o/openssl/"
           ver="$(curl -fsSL "$base" | grep -oE 'libssl1\.1_1\.1\.1f-[0-9a-z.~+]+_amd64\.deb' | sed -E 's/^libssl1\.1_(.*)_amd64\.deb$/\1/' | sort -V | tail -1)"
           test -n "$ver"
-          curl -fsSL -o libssl1.1.deb "${base}libssl1.1_${ver}_amd64.deb"
+          curl -fsSL -o libssl1.1.deb "\${base}libssl1.1_\${ver}_amd64.deb"
           sudo dpkg -i libssl1.1.deb || sudo apt-get install -f -y
       - name: Install OpenOrbis toolchain
         run: |
@@ -31,18 +29,21 @@ jobs:
           OO_ROOT="$(dirname "$(find "$HOME/oo" -name link.x -print -quit)")"
           test -f "$OO_ROOT/link.x"
           echo "OO_PS4_TOOLCHAIN=$OO_ROOT" >> "$GITHUB_ENV"
-      - name: Stage required system module
+      - name: Stage required system modules
         run: |
-          mkdir -p sce_sys/about
+          mkdir -p sce_sys/about sce_module
           RS="$(find "$OO_PS4_TOOLCHAIN" -name right.sprx -print -quit)"
           test -n "$RS"
           cp "$RS" sce_sys/about/right.sprx
+          for module in libc.prx libSceFios2.prx; do
+            found="$(find "$OO_PS4_TOOLCHAIN" -name "$module" -print -quit)"
+            if [ -n "$found" ]; then cp "$found" "sce_module/$module"; fi
+          done
       - name: Build PSVault
         run: |
           CLANG="$(find "$OO_PS4_TOOLCHAIN" -type f -name clang -print -quit)"
-          CLANGXX="$(find "$OO_PS4_TOOLCHAIN" -type f -name clang++ -print -quit)"
           LLD="$(find "$OO_PS4_TOOLCHAIN" -type f -name ld.lld -print -quit)"
-          make CC="${CLANG:-clang}" CXX="${CLANGXX:-clang++}" LD="${LLD:-ld.lld}"
+          make CC="\${CLANG:-clang}" LD="\${LLD:-ld.lld}"
       - name: Upload PSVault package
         uses: actions/upload-artifact@v4
         with:
