@@ -65,17 +65,29 @@ static int open_http(const char*u,int*t,int*c,int*q){
  if(sceHttpSendRequest(*q,NULL,0)<0)return -1;
  int32_t s=0;if(sceHttpGetStatusCode(*q,&s)<0||s<200||s>=300)return -1;return 0;
 }
+static void parse_catalog(char *buf){
+ game_count=0;char*save=0;
+ for(char*l=strtok_r(buf,"\r\n",&save);l;l=strtok_r(NULL,"\r\n",&save)){
+  if(*l=='#'||!*l)continue;Game g;memset(&g,0,sizeof(g));char*p=l,*f[5]={0};
+  for(int i=0;i<5;i++){f[i]=p;if(!p)break;char*z=strchr(p,'|');if(z){*z=0;p=z+1;}else p=NULL;}
+  if(f[0]&&f[1]&&f[2]&&f[3]&&f[4]&&strstr(f[4],".pkg")&&game_count<MAX_GAMES){
+   snprintf(g.title,sizeof(g.title),"%s",f[0]);snprintf(g.category,sizeof(g.category),"%s",f[1]);
+   snprintf(g.version,sizeof(g.version),"%s",f[2]);snprintf(g.size,sizeof(g.size),"%s",f[3]);
+   snprintf(g.url,sizeof(g.url),"%s",f[4]);games[game_count++]=g;
+  }
+ }
+}
 static int refresh_catalog(void){
- int t=0,c=0,q=0,ok=-1;if(open_http(CATALOG_URL,&t,&c,&q)<0)goto end;
- char buf[65536];size_t n=0;while(n<sizeof(buf)-1){int k=sceHttpReadData(q,buf+n,(unsigned int)(sizeof(buf)-1-n));if(k<0)goto end;if(!k)break;n+=(size_t)k;}buf[n]=0;
- game_count=0;char*save=0;for(char*l=strtok_r(buf,"\r\n",&save);l;l=strtok_r(NULL,"\r\n",&save)){
- if(*l=='#'||!*l)continue;Game g;memset(&g,0,sizeof(g));char*p=l,*f[5]={0};
- for(int i=0;i<5;i++){f[i]=p;if(!p)break;char*z=strchr(p,'|');if(z){*z=0;p=z+1;}else p=NULL;}
- if(f[0]&&f[1]&&f[2]&&f[3]&&f[4]&&strstr(f[4],".pkg")&&game_count<MAX_GAMES){
- snprintf(g.title,sizeof(g.title),"%s",f[0]);snprintf(g.category,sizeof(g.category),"%s",f[1]);snprintf(g.version,sizeof(g.version),"%s",f[2]);snprintf(g.size,sizeof(g.size),"%s",f[3]);snprintf(g.url,sizeof(g.url),"%s",f[4]);games[game_count++]=g;
- }}
- ok=0;
-end:close_http(t,c,q);return ok;
+ int t=0,c=0,q=0,ok=-1;char buf[65536];size_t n=0;
+ if(open_http(CATALOG_URL,&t,&c,&q)==0){
+  while(n<sizeof(buf)-1){int k=sceHttpReadData(q,buf+n,(unsigned int)(sizeof(buf)-1-n));if(k<0)break;if(!k){ok=0;break;}n+=(size_t)k;}
+  close_http(t,c,q);t=c=q=0;
+  if(ok==0){buf[n]=0;FILE*f=fopen("/data/PSVault/catalog.tsv","wb");if(f){fwrite(buf,1,n,f);fclose(f);}parse_catalog(buf);return 0;}
+ }
+ close_http(t,c,q);
+ FILE*f=fopen("/data/PSVault/catalog.tsv","rb");
+ if(!f)return -1;
+ n=fread(buf,1,sizeof(buf)-1,f);fclose(f);buf[n]=0;parse_catalog(buf);return 0;
 }
 static void render(void){
  base();
