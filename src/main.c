@@ -168,7 +168,7 @@ static void render_keyboard(void){
  box(420,610,1080,350,25,31,47);small(465,635,"SEARCH KEYBOARD - CROSS TYPE - CIRCLE CLOSE");
  const char*keys="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"; 
  for(int i=0;i<40;i++){int x=470+(i%10)*96,y=680+(i/10)*54;box(x,y,82,42,i==keyboard_cursor?92:42,i==keyboard_cursor?68:50,i==keyboard_cursor?126:67);
-  char s[2];s[0]=(i<38)?keys[i]:(i==38?'<': ' ');s[1]=0;txt(x+27,y+12,s,2,246,247,255);
+  char s[2];s[0]=(i<38)?keys[i]:(i==38?'<':'C');s[1]=0;txt(x+27,y+12,s,2,246,247,255);
  }
  box(1380,900,100,42,70,51,100);small(1402,914,"DONE");
 }
