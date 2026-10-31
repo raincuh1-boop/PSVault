@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <stdbool.h>
 #include <orbis/Http.h>
 #include <orbis/Ssl.h>
 #include <orbis/Net.h>
