@@ -1,0 +1,26 @@
+name: PSVault Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build PS4 application
+        uses: OpenOrbis/toolchain-action@main
+        with:
+          version: v0.5.1
+          command: cd hello_world && make && PkgTool.Core pkg_build pkg/pkg.gp4 .
+
+      - name: Upload PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: PSVault-PKG
+          path: hello_world/*.pkg
