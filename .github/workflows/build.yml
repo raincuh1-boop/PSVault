@@ -60,6 +60,9 @@ jobs:
           if [ -z "$LLD" ]; then LLD="$(command -v ld.lld)"; fi
           test -n "$CLANG" && test -n "$LLD"
           make CC="$CLANG" LD="$LLD"
+      - name: Validate PS4 PKG
+        run: |
+          "$OO_PS4_TOOLCHAIN/bin/linux/PkgTool.Core" pkg_validate --verbose IV0000-PSVT00001_00-PSVAULT000000001.pkg
       - name: Upload PSVault package
         uses: actions/upload-artifact@v4
         with:
