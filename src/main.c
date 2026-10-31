@@ -36,6 +36,7 @@ enum { QUEUED, ACTIVE, DONE, FAILED };
 static Game games[MAX_GAMES];
 static Item queue[MAX_QUEUE];
 static char categories[MAX_CATEGORIES][48];
+static int game_count=0;
 static int category_count=0, category_filter=-1;
 static int filtered[MAX_GAMES], filtered_count=0;
 static int queue_count=0, selected=0, qselected=0, detail_game=-1;
