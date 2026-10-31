@@ -6,6 +6,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # PkgTool.Core is a .NET utility. Invariant mode avoids requiring
+      # a matching ICU runtime on GitHub's rolling Ubuntu images.
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
