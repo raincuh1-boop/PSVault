@@ -56,7 +56,8 @@ jobs:
         run: |
           CLANG="$(find "$OO_PS4_TOOLCHAIN" -type f -name clang -print -quit)"
           LLD="$(find "$OO_PS4_TOOLCHAIN" -type f -name ld.lld -print -quit)"
-          make CC="\${CLANG:-clang}" LD="\${LLD:-ld.lld}"
+          test -n "$CLANG" && test -n "$LLD"
+          make CC="$CLANG" LD="$LLD"
       - name: Upload PSVault package
         uses: actions/upload-artifact@v4
         with:
