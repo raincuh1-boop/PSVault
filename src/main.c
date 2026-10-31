@@ -32,7 +32,7 @@ typedef struct {
  char path[256], error[128];
 } Item;
 enum { HOME, CATALOG, DOWNLOADS, SETTINGS, DETAILS };
-enum { QUEUED, ACTIVE, DONE, FAILED };
+enum { QUEUED, ACTIVE, DONE, FAILED, PAUSED };
 
 static Game games[MAX_GAMES];
 static Item queue[MAX_QUEUE];
@@ -153,10 +153,10 @@ static void load_queue(void){
   char*c=strtok_r(NULL,"|\r\n",&save);char*u=strtok_r(NULL,"|\r\n",&save);if(!a||!b||!c||!u)continue;
   int game=-1;for(int i=0;i<game_count;i++)if(!strcmp(games[i].url,u)){game=i;break;}if(game<0)continue;
   Item*d=&queue[queue_count++];memset(d,0,sizeof(*d));d->game=game;d->state=atoi(a);d->got=(uint64_t)strtoull(b,NULL,10);d->total=(uint64_t)strtoull(c,NULL,10);
-  if(d->state<QUEUED||d->state>FAILED||d->state==ACTIVE)d->state=FAILED;
+  if(d->state<QUEUED||d->state>PAUSED)d->state=FAILED;else if(d->state==ACTIVE)d->state=PAUSED;
   make_path(d);char partial[320];part_path(d,partial,sizeof(partial));struct stat st;
   if(d->state==DONE){if(stat(d->path,&st)!=0)d->state=QUEUED;}
-  else if(stat(partial,&st)==0&&st.st_size>0&&(uint64_t)st.st_size<=d->total){d->got=(uint64_t)st.st_size;d->state=FAILED;}
+  else if(stat(partial,&st)==0&&st.st_size>0&&(d->total==0||(uint64_t)st.st_size<=d->total)){d->got=(uint64_t)st.st_size;d->state=FAILED;}
   else {d->got=0;if(d->state!=QUEUED)d->state=FAILED;}
  }
  fclose(f);if(qselected>=queue_count)qselected=queue_count?queue_count-1:0;
@@ -218,7 +218,7 @@ static void render(void){
   for(int n=start;n<queue_count&&n<start+5;n++){Item*d=&queue[n];int y=285+(n-start)*120;
    box(80,y,1760,102,n==qselected?42:23,n==qselected?37:30,n==qselected?64:44);
    if(d->game>=0&&d->game<game_count)txt(110,y+15,games[d->game].title,3,245,247,255);
-   const char*s=d->state==QUEUED?"QUEUED":d->state==ACTIVE?"DOWNLOADING":d->state==DONE?"DOWNLOADED":"FAILED";
+   const char*s=d->state==QUEUED?"QUEUED":d->state==ACTIVE?"DOWNLOADING":d->state==DONE?"DOWNLOADED":d->state==PAUSED?"PAUSED":"FAILED";
    txt(110,y+63,s,2,170,180,200);
    box(650,y+70,1050,10,52,57,70);if(d->total)box(650,y+70,(int)((d->got*1050)/d->total),10,178,139,255);
   }
@@ -268,6 +268,7 @@ static int download_item(Item*d){
  }
  FILE*f=fopen(partial,offset>0?"ab":"wb");if(!f){snprintf(d->error,sizeof(d->error),"CANNOT WRITE TO DOWNLOAD FOLDER");goto out;}
  checkpoint=d->got+2*1024*1024;
+ unsigned char b[65536];
  for(;;){
   poll_download_controls();if(download_cancel_requested){snprintf(d->error,sizeof(d->error),"PAUSED BY USER");break;}
   int n=sceHttpReadData(q,b,sizeof(b));if(n<0){snprintf(d->error,sizeof(d->error),"CONNECTION INTERRUPTED");break;}if(!n){ok=0;break;}
@@ -278,11 +279,11 @@ static int download_item(Item*d){
  fflush(f);fclose(f);
  if(ok==0&&d->total&&d->got!=d->total){ok=-1;snprintf(d->error,sizeof(d->error),"PACKAGE SIZE MISMATCH");}
  if(ok==0){if(rename(partial,d->path)!=0){ok=-1;snprintf(d->error,sizeof(d->error),"COULD NOT FINALIZE PACKAGE FILE");}}
-out:close_http(t,c,q);d->state=ok==0?DONE:FAILED;
+out:close_http(t,c,q);d->state=ok==0?DONE:(download_cancel_requested?PAUSED:FAILED);
  if(ok<0){struct stat ps;if(stat(partial,&ps)==0)d->got=(uint64_t)ps.st_size;}
  save_queue();return ok;
 }
-static void start_queue(void){for(int i=0;i<queue_count&&running;i++)if(queue[i].state==QUEUED||queue[i].state==FAILED){download_item(&queue[i]);qselected=i;if(download_cancel_requested)break;}}
+static void start_queue(void){for(int i=0;i<queue_count&&running;i++)if(queue[i].state==QUEUED||queue[i].state==FAILED||queue[i].state==PAUSED){download_item(&queue[i]);qselected=i;if(download_cancel_requested)break;}}
 static void search_append(char c){size_t n=strlen(search_text);if(n<sizeof(search_text)-1){search_text[n]=c;search_text[n+1]=0;selected=0;build_filtered();}}
 static void search_delete(void){size_t n=strlen(search_text);if(n){search_text[n-1]=0;selected=0;build_filtered();}}
 static void keyboard_activate(void){
