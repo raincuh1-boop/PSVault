@@ -54,8 +54,10 @@ jobs:
           done
       - name: Build PSVault
         run: |
-          CLANG="$(find "$OO_PS4_TOOLCHAIN" -type f -name clang -print -quit)"
-          LLD="$(find "$OO_PS4_TOOLCHAIN" -type f -name ld.lld -print -quit)"
+          CLANG="$(find "$OO_PS4_TOOLCHAIN" -name clang -print -quit)"
+          LLD="$(find "$OO_PS4_TOOLCHAIN" -name ld.lld -print -quit)"
+          if [ -z "$CLANG" ]; then CLANG="$(command -v clang)"; fi
+          if [ -z "$LLD" ]; then LLD="$(command -v ld.lld)"; fi
           test -n "$CLANG" && test -n "$LLD"
           make CC="$CLANG" LD="$LLD"
       - name: Upload PSVault package
