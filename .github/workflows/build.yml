@@ -13,7 +13,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y make curl libicu-dev clang lld python3
+          sudo apt-get install -y make curl git cmake libicu-dev clang lld python3
       - name: Install libssl1.1 for PkgTool.Core
         run: |
           base="http://security.ubuntu.com/ubuntu/pool/main/o/openssl/"
@@ -29,6 +29,16 @@ jobs:
           OO_ROOT="$(dirname "$(find "$HOME/oo" -name link.x -print -quit)")"
           test -f "$OO_ROOT/link.x"
           echo "OO_PS4_TOOLCHAIN=$OO_ROOT" >> "$GITHUB_ENV"
+      - name: Build PS4 SDL2 library
+        run: |
+          git clone --depth 1 --branch ps4 https://github.com/bucanero/SDL-PS4.git "$HOME/SDL-PS4"
+          mkdir -p "$HOME/SDL-PS4/orbis"
+          cd "$HOME/SDL-PS4/orbis"
+          cmake --toolchain ../cmake/openorbis.cmake ..
+          make -j2
+          cp libSDL2.a "$OO_PS4_TOOLCHAIN/lib/libSDL2.a"
+          mkdir -p "$OO_PS4_TOOLCHAIN/include/SDL2"
+          cp -R "$HOME/SDL-PS4/include/." "$OO_PS4_TOOLCHAIN/include/SDL2/"
       - name: Stage required system modules
         run: |
           mkdir -p sce_sys/about sce_module
