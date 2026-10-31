@@ -26,7 +26,7 @@ typedef struct {
 } Game;
 typedef struct {
  int game, state;
- uint64_t got, total;
+ uint64_t got, total, start_bytes;
  uint32_t started_ms;
  double speed;
  char path[256], error[128];
@@ -156,7 +156,7 @@ static void load_queue(void){
   if(d->state<QUEUED||d->state>PAUSED)d->state=FAILED;else if(d->state==ACTIVE)d->state=PAUSED;
   make_path(d);char partial[320];part_path(d,partial,sizeof(partial));struct stat st;
   if(d->state==DONE){if(stat(d->path,&st)!=0)d->state=QUEUED;}
-  else if(stat(partial,&st)==0&&st.st_size>0&&(d->total==0||(uint64_t)st.st_size<=d->total)){d->got=(uint64_t)st.st_size;d->state=FAILED;}
+  else if(stat(partial,&st)==0&&st.st_size>0&&(d->total==0||(uint64_t)st.st_size<=d->total)){d->got=(uint64_t)st.st_size;if(d->state!=PAUSED)d->state=FAILED;}
   else {d->got=0;if(d->state!=QUEUED)d->state=FAILED;}
  }
  fclose(f);if(qselected>=queue_count)qselected=queue_count?queue_count-1:0;
@@ -235,7 +235,7 @@ static void render(void){
 }
 static void update_progress(Item*d){
  uint32_t elapsed=SDL_GetTicks()-d->started_ms;if(elapsed<1)elapsed=1;
- d->speed=(double)d->got*1000.0/(double)elapsed;
+ d->speed=(double)(d->got>=d->start_bytes?d->got-d->start_bytes:0)*1000.0/(double)elapsed;
  base();big(80,175,"DOWNLOADING PACKAGE");if(d->game>=0&&d->game<game_count)big(80,260,games[d->game].title);
  box(100,440,1650,28,48,54,68);if(d->total){uint64_t pc=d->got>=d->total?1650:(d->got*1650)/d->total;box(100,440,(int)pc,28,178,139,255);}
  char s[160];snprintf(s,sizeof(s),"%llu / %llu BYTES",(unsigned long long)d->got,(unsigned long long)d->total);small(100,520,s);
@@ -256,7 +256,7 @@ static int download_item(Item*d){
  struct stat st;if(stat(partial,&st)==0&&st.st_size>0)offset=(uint64_t)st.st_size;
  if(d->total&&offset>d->total){remove(partial);offset=0;}
  if(d->total&&offset==d->total){if(rename(partial,d->path)==0){d->got=d->total;d->state=DONE;save_queue();return 0;}remove(partial);offset=0;}
- d->state=ACTIVE;d->got=offset;d->started_ms=SDL_GetTicks();d->speed=0;d->error[0]=0;download_cancel_requested=0;save_queue();
+ if(offset==0)d->total=0;d->state=ACTIVE;d->got=offset;d->start_bytes=offset;d->started_ms=SDL_GetTicks();d->speed=0;d->error[0]=0;download_cancel_requested=0;save_queue();
  if(open_http(games[d->game].url,&t,&c,&q,offset,&status)<0){snprintf(d->error,sizeof(d->error),"HTTP REQUEST FAILED");goto out;}
  if(offset>0&&status==200){
   close_http(t,c,q);t=c=q=0;offset=0;d->got=0;d->total=0;
