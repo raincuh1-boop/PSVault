@@ -34,7 +34,7 @@ jobs:
           git clone --depth 1 --branch ps4 https://github.com/bucanero/SDL-PS4.git "$HOME/SDL-PS4"
           mkdir -p "$HOME/SDL-PS4/orbis"
           cd "$HOME/SDL-PS4/orbis"
-          cmake --toolchain ../cmake/openorbis.cmake ..
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 --toolchain ../cmake/openorbis.cmake ..
           make -j2
           cp libSDL2.a "$OO_PS4_TOOLCHAIN/lib/libSDL2.a"
           mkdir -p "$OO_PS4_TOOLCHAIN/include/SDL2"
