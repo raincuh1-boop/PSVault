@@ -19,6 +19,7 @@
 #define CATALOG_URL "https://raw.githubusercontent.com/raincuh1-boop/PSVault/main/catalog.tsv"
 #define UA "PSVault/0.2 (PlayStation 4)"
 #define DATA_DIR "/data/PSVault"
+#define INSTALL_DIR "/data/pkg"
 #define QUEUE_FILE DATA_DIR "/downloads.tsv"
 
 typedef struct {
@@ -106,8 +107,10 @@ static int open_http(const char*u,int*t,int*c,int*q,uint64_t offset,int32_t *sta
  if(sceHttpAddRequestHeader(*q,"Accept-Encoding","identity",0)<0)return -1;
  if(offset>0){char range[64];snprintf(range,sizeof(range),"bytes=%llu-",(unsigned long long)offset);if(sceHttpAddRequestHeader(*q,"Range",range,0)<0)return -1;}
  if(sceHttpSendRequest(*q,NULL,0)<0)return -1;
- int32_t s=0;if(sceHttpGetStatusCode(*q,&s)<0||s<200||s>=300)return -1;
- if(status_out)*status_out=s;return 0;
+ int32_t s=0;if(sceHttpGetStatusCode(*q,&s)<0)return -1;
+ if(status_out)*status_out=s;
+ if(s<200||s>=300)return -1;
+ return 0;
 }
 static void parse_catalog(char *buf){
  game_count=0;char*save=0;
@@ -135,8 +138,16 @@ static int refresh_catalog(void){
  n=fread(buf,1,sizeof(buf)-1,f);fclose(f);buf[n]=0;parse_catalog(buf);return 0;
 }
 static void make_path(Item*d){
- snprintf(d->path,sizeof(d->path),DATA_DIR "/%s.pkg",games[d->game].title);
- for(char*p=d->path+strlen(DATA_DIR "/");*p;p++)if(!isalnum((unsigned char)*p)&&*p!='-'&&*p!='_')*p='_';
+ char name[160];
+ snprintf(name,sizeof(name),"%s.pkg",games[d->game].title);
+ for(char*p=name;*p;p++)if(!isalnum((unsigned char)*p)&&*p!='-'&&*p!='_')*p='_';
+ snprintf(d->path,sizeof(d->path),INSTALL_DIR "/%s",name);
+}
+static int validate_pkg(const char *path){
+ FILE*f=fopen(path,"rb");if(!f)return 0;
+ unsigned char h[4];int ok=fread(h,1,sizeof(h),f)==sizeof(h);
+ fclose(f);
+ return ok&&h[0]==0x7f&&h[1]==0x43&&h[2]==0x4e&&h[3]==0x54;
 }
 static void save_queue(void){
  FILE*f=fopen(QUEUE_FILE,"wb");if(!f)return;
@@ -145,7 +156,10 @@ static void save_queue(void){
  }
  fclose(f);
 }
-static void part_path(const Item*d,char*out,size_t n){snprintf(out,n,"%s.part",d->path);}
+static void part_path(const Item*d,char*out,size_t n){
+ const char*name=strrchr(d->path,'/');name=name?name+1:d->path;
+ snprintf(out,n,DATA_DIR "/%s.part",name);
+}
 static void load_queue(void){
  FILE*f=fopen(QUEUE_FILE,"rb");if(!f)return;char line[1200];queue_count=0;
  while(fgets(line,sizeof(line),f)&&queue_count<MAX_QUEUE){
@@ -168,6 +182,7 @@ static void queue_add(int i){
 }
 static void queue_remove(void){
  if(!queue_count)return;
+ char partial[320];part_path(&queue[qselected],partial,sizeof(partial));remove(partial);
  for(int i=qselected;i<queue_count-1;i++)queue[i]=queue[i+1];
  queue_count--;if(qselected>=queue_count)qselected=queue_count?queue_count-1:0;save_queue();
 }
@@ -222,14 +237,17 @@ static void render(void){
    txt(110,y+63,s,2,170,180,200);
    box(650,y+70,1050,10,52,57,70);if(d->total)box(650,y+70,(int)((d->got*1050)/d->total),10,178,139,255);
   }
-  small(80,920,"CROSS START / RETRY   SQUARE REMOVE FROM HISTORY   START PROCESS QUEUE");
+  if(queue_count&&queue[qselected].error[0]){txt(90,900,queue[qselected].error,2,226,151,151);}
+  small(80,950,"CROSS START / RETRY   SQUARE REMOVE   START PROCESS QUEUE");
  }else{
   big(80,160,"SETTINGS");box(80,245,1760,530,24,29,43);
-  small(120,300,"DOWNLOAD FOLDER: " DATA_DIR);small(120,380,"CATALOG SOURCE: PSVAULT GITHUB REPOSITORY / catalog.tsv");
-  small(120,470,"DOWNLOADS ARE STORED LOCALLY AS PKG FILES.");
-  small(120,540,"USE THE PS4 PACKAGE INSTALLER TO INSTALL DOWNLOADED PACKAGES.");
-  small(120,640,"DOWNLOADS REQUIRE A DIRECT HTTPS .PKG URL.");
-  small(120,710,"ONLY DISTRIBUTE HOMEBREW OR PACKAGES YOU ARE AUTHORIZED TO SHARE.");
+  small(120,300,"QUEUE AND PARTIAL FILES: " DATA_DIR);
+  small(120,370,"VALIDATED PACKAGES ARE MOVED TO: " INSTALL_DIR);
+  small(120,440,"PKG HEADER CHECK: 7F 43 4E 54");
+  small(120,510,"GOLDHEN 2.3+: DEBUG SETTINGS > PACKAGE INSTALLER");
+  small(120,580,"SET PACKAGE SOURCE TO HDD TO SCAN /data/pkg");
+  small(120,650,"DOWNLOADS REQUIRE A DIRECT HTTPS .PKG URL.");
+  small(120,720,"ONLY USE HOMEBREW OR PACKAGES YOU ARE AUTHORIZED TO SHARE.");
  }
  SDL_RenderPresent(ren);
 }
@@ -252,15 +270,15 @@ static void poll_download_controls(void){
 }
 static int download_item(Item*d){
  int t=0,c=0,q=0,ok=-1,status=0,type=0;uint64_t len=0,offset=0,checkpoint=0;
- char partial[320];mkdir(DATA_DIR,0777);make_path(d);part_path(d,partial,sizeof(partial));
+ char partial[320];mkdir(DATA_DIR,0777);mkdir(INSTALL_DIR,0777);make_path(d);part_path(d,partial,sizeof(partial));
  struct stat st;if(stat(partial,&st)==0&&st.st_size>0)offset=(uint64_t)st.st_size;
  if(d->total&&offset>d->total){remove(partial);offset=0;}
  if(d->total&&offset==d->total){if(rename(partial,d->path)==0){d->got=d->total;d->state=DONE;save_queue();return 0;}remove(partial);offset=0;}
  if(offset==0)d->total=0;d->state=ACTIVE;d->got=offset;d->start_bytes=offset;d->started_ms=SDL_GetTicks();d->speed=0;d->error[0]=0;download_cancel_requested=0;save_queue();
- if(open_http(games[d->game].url,&t,&c,&q,offset,&status)<0){snprintf(d->error,sizeof(d->error),"HTTP REQUEST FAILED");goto out;}
+ if(open_http(games[d->game].url,&t,&c,&q,offset,&status)<0){snprintf(d->error,sizeof(d->error),status?"HTTP STATUS %d":"HTTP REQUEST FAILED",status);goto out;}
  if(offset>0&&status==200){
   close_http(t,c,q);t=c=q=0;offset=0;d->got=0;d->total=0;
-  if(open_http(games[d->game].url,&t,&c,&q,0,&status)<0){snprintf(d->error,sizeof(d->error),"HTTP RESTART REQUEST FAILED");goto out;}
+  if(open_http(games[d->game].url,&t,&c,&q,0,&status)<0){snprintf(d->error,sizeof(d->error),status?"HTTP STATUS %d":"HTTP RESTART REQUEST FAILED",status);goto out;}
  }
  if(offset>0&&status!=206){snprintf(d->error,sizeof(d->error),"SERVER DOES NOT SUPPORT RANGE RESUME");goto out;}
  if(sceHttpGetResponseContentLength(q,&type,&len)==0&&type==ORBIS_HTTP_CONTENTLEN_EXIST){
@@ -278,7 +296,10 @@ static int download_item(Item*d){
  }
  fflush(f);fclose(f);
  if(ok==0&&d->total&&d->got!=d->total){ok=-1;snprintf(d->error,sizeof(d->error),"PACKAGE SIZE MISMATCH");}
- if(ok==0){if(rename(partial,d->path)!=0){ok=-1;snprintf(d->error,sizeof(d->error),"COULD NOT FINALIZE PACKAGE FILE");}}
+ if(ok==0){
+  if(!validate_pkg(partial)){remove(partial);d->got=d->total=0;ok=-1;snprintf(d->error,sizeof(d->error),"INVALID PS4 PKG HEADER");}
+  else if(rename(partial,d->path)!=0){ok=-1;snprintf(d->error,sizeof(d->error),"COULD NOT MOVE PKG INTO /data/pkg");}
+ }
 out:close_http(t,c,q);d->state=ok==0?DONE:(download_cancel_requested?PAUSED:FAILED);
  if(ok<0){struct stat ps;if(stat(partial,&ps)==0)d->got=(uint64_t)ps.st_size;}
  save_queue();return ok;

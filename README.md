@@ -8,7 +8,9 @@ A native PlayStation 4 homebrew storefront built with SDL2 and the OpenOrbis too
 - Category filtering with L1/R1 and local catalogue caching for offline browsing
 - Optional package descriptions in the catalogue
 - Metadata-only catalogue entries are supported; entries without an authorized direct PKG URL cannot be queued
-- Direct HTTPS PKG downloads to `/data/PSVault/`
+- Direct HTTPS PKG downloads, staged in `/data/PSVault/` and moved to `/data/pkg/` when complete
+- PS4 PKG header validation before a file is marked downloaded
+- GoldHEN internal Package Installer handoff through `/data/pkg/` (GoldHEN 2.3+)
 - Persistent download queue and download history
 - Sequential queue processing, retry, removal, live transfer speed, ETA and content-length checks
 - Pause and resume using HTTP Range when the host supports it; partial files are checkpointed locally
@@ -42,9 +44,9 @@ GitHub Actions builds the native application with the OpenOrbis PS4 toolchain an
 ## Current limitations
 
 - Resume depends on the package host honoring HTTP Range requests. Hosts that ignore Range are safely restarted from byte zero.
-- Downloaded packages are saved for the PS4 Package Installer. Installation is a manual handoff; PSVault does not bypass licences or distribute unauthorized commercial packages.
-- The native app still needs one real-console verification pass for controller, network, storage and firmware compatibility.
-- Package cover art and a verified GoldHEN-assisted install integration are not included yet.
+- Validated packages are moved into `/data/pkg/`. On GoldHEN 2.3 or later, enable internal package installation and select HDD as the Package Installer source. Actual install remains a user-confirmed action in Debug Settings; PSVault does not trigger an undocumented installer API.
+- The native app still needs one real-console verification pass for controller, network, storage, GoldHEN settings and firmware compatibility.
+- Package cover art is not included yet. GoldHEN handoff is via the documented `/data/pkg/` scan path, not automatic installation.
 - Metadata-only entries do not provide downloads; add an authorized direct HTTPS `.pkg` URL to enable queueing.
 
 PSVault is independent and not affiliated with Sony Interactive Entertainment.
