@@ -19,7 +19,7 @@ jobs:
           base="http://security.ubuntu.com/ubuntu/pool/main/o/openssl/"
           ver="$(curl -fsSL "$base" | grep -oE 'libssl1\.1_1\.1\.1f-[0-9a-z.~+]+_amd64\.deb' | sed -E 's/^libssl1\.1_(.*)_amd64\.deb$/\1/' | sort -V | tail -1)"
           test -n "$ver"
-          curl -fsSL -o libssl1.1.deb "\${base}libssl1.1_\${ver}_amd64.deb"
+          curl -fsSL -o libssl1.1.deb "${base}libssl1.1_${ver}_amd64.deb"
           sudo dpkg -i libssl1.1.deb || sudo apt-get install -f -y
       - name: Install OpenOrbis toolchain
         run: |
