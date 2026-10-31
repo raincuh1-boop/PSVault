@@ -114,7 +114,7 @@ static void parse_catalog(char *buf){
  for(char*l=strtok_r(buf,"\r\n",&save);l;l=strtok_r(NULL,"\r\n",&save)){
   if(*l=='#'||!*l)continue;
   char*p=l,*f[6]={0};for(int i=0;i<6;i++){f[i]=p;if(!p)break;char*z=strchr(p,'|');if(z){*z=0;p=z+1;}else p=NULL;}
-  if(f[0]&&f[1]&&f[2]&&f[3]&&f[4]&&!strncmp(f[4],"https://",8)&&strstr(f[4],".pkg")&&game_count<MAX_GAMES){
+  if(f[0]&&f[1]&&f[2]&&f[3]&&f[4]&&(!f[4][0]||(!strncmp(f[4],"https://",8)&&strstr(f[4],".pkg")))&&game_count<MAX_GAMES){
    Game*g=&games[game_count++];memset(g,0,sizeof(*g));
    snprintf(g->title,sizeof(g->title),"%s",f[0]);snprintf(g->category,sizeof(g->category),"%s",f[1]);
    snprintf(g->version,sizeof(g->version),"%s",f[2]);snprintf(g->size,sizeof(g->size),"%s",f[3]);
@@ -162,7 +162,7 @@ static void load_queue(void){
  fclose(f);if(qselected>=queue_count)qselected=queue_count?queue_count-1:0;
 }
 static void queue_add(int i){
- if(i<0||i>=game_count||queue_count>=MAX_QUEUE)return;
+ if(i<0||i>=game_count||!games[i].url[0]||queue_count>=MAX_QUEUE)return;
  for(int n=0;n<queue_count;n++)if(!strcmp(games[queue[n].game].url,games[i].url)){if(queue[n].state==FAILED){queue[n].state=QUEUED;queue[n].got=queue[n].total=0;save_queue();}return;}
  Item*d=&queue[queue_count++];memset(d,0,sizeof(*d));d->game=i;d->state=QUEUED;make_path(d);save_queue();
 }
@@ -207,9 +207,9 @@ static void render(void){
    small(130,450,"VERSION");txt(390,450,games[i].version,2,245,247,255);
    small(130,510,"PACKAGE SIZE");txt(390,510,games[i].size,2,245,247,255);
    small(130,590,"DESCRIPTION");txt(390,590,games[i].description[0]?games[i].description:"NO DESCRIPTION PROVIDED",2,190,200,216);
-   small(130,680,"SOURCE");txt(390,680,"DIRECT HTTPS PKG URL",2,190,200,216);
-   box(85,850,400,80,73,52,111);big(125,874,"ADD TO QUEUE");
-   small(540,880,"CROSS ADD   CIRCLE BACK");
+   small(130,680,"SOURCE");txt(390,680,games[i].url[0]?"DIRECT HTTPS PKG URL":"METADATA ONLY - NO PACKAGE LINK",2,190,200,216);
+   if(games[i].url[0]){box(85,850,400,80,73,52,111);big(125,874,"ADD TO QUEUE");small(540,880,"CROSS ADD   CIRCLE BACK");}
+   else {box(85,850,650,80,48,43,57);big(125,874,"CATALOG ENTRY ONLY");small(800,880,"ADD AN AUTHORIZED PKG URL TO ENABLE DOWNLOADS");}
   }
  }else if(page==DOWNLOADS){
   big(80,150,"DOWNLOAD MANAGER");small(80,220,"QUEUED, DOWNLOADED AND FAILED ITEMS ARE SAVED BETWEEN SESSIONS");

@@ -1,2 +1,16 @@
 # PSVault catalogue: title|category|version|size|direct_pkg_url|optional_description
-# Add only homebrew or packages you are authorized to distribute.
+# Metadata-only entries have an empty direct_pkg_url field and cannot be queued.
+# Add direct HTTPS .pkg URLs only for homebrew or packages you are authorized to distribute.
+Bloodborne|Action RPG|Metadata|Unknown||Catalogue entry only
+Grand Theft Auto V|Open World|Metadata|Unknown||Catalogue entry only
+Mortal Kombat Legacy Kollection|Fighting|Metadata|Unknown||Catalogue entry only
+God of War Ragnarok|Action Adventure|Metadata|Unknown||Catalogue entry only
+Red Dead Redemption 2|Open World|Metadata|Unknown||Catalogue entry only
+Tekken 7|Fighting|Metadata|Unknown||Catalogue entry only
+Mortal Kombat 11 Ultimate|Fighting|Metadata|Unknown||Catalogue entry only
+Elden Ring Nightreign|Action RPG|Metadata|Unknown||Catalogue entry only
+Need for Speed Heat|Racing|Metadata|Unknown||Catalogue entry only
+Marvels Spider-Man|Action Adventure|Metadata|Unknown||Catalogue entry only
+Batman Arkham Knight|Action Adventure|Metadata|Unknown||Catalogue entry only
+Elden Ring Shadow of the Erdtree|Action RPG|Metadata|Unknown||Catalogue entry only
+Hogwarts Legacy|Action Adventure|Metadata|Unknown||Catalogue entry only
