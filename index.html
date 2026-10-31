@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090a12"><meta name="description" content="PSVault, an offline-ready PS4 game library.">
+<link rel="manifest" href="./manifest.webmanifest"><link rel="stylesheet" href="./styles.css">
+<title>PSVault</title>
+</head>
+<body>
+<div class="app-shell">
+<header class="topbar"><a class="brand" href="#" aria-label="PSVault home"><span class="brand-mark">P</span><span>PS<span class="accent">VAULT</span></span></a><div class="top-meta"><span class="live-dot"></span><span id="connection">Checking connection</span><span class="top-divider"></span><span id="clock">--:--</span></div></header>
+<main>
+<section class="hero"><div class="hero-copy"><p class="eyebrow">YOUR PLAYSTATION LIBRARY</p><h1>Welcome to<br><span class="gradient-text">the Vault.</span></h1><p class="hero-sub">Your games. Your collection. One place.</p><div class="hero-actions"><button class="primary-btn" id="browseBtn">Explore catalogue <span>↗</span></button><span class="hero-note">13 titles <i>·</i> Offline ready</span></div></div><div class="hero-art" aria-hidden="true"><div class="orb orb-one"></div><div class="orb orb-two"></div><div class="vault-symbol">P<span>V</span></div><div class="art-ring ring-one"></div><div class="art-ring ring-two"></div><div class="art-caption">EST. 2026<br>PLAYER LIBRARY</div></div></section>
+<section class="stats"><div><span class="stat-value" id="gameCount">13</span><span class="stat-label">IN CATALOGUE</span></div><div><span class="stat-value">100%</span><span class="stat-label">OFFLINE UI</span></div><div><span class="stat-value">PS4</span><span class="stat-label">BUILT FOR</span></div></section>
+<section class="catalogue" id="catalogue"><div class="section-head"><div><p class="eyebrow">THE COLLECTION</p><h2>Game catalogue</h2></div><span class="catalogue-count" id="resultCount">13 GAMES</span></div>
+<div class="toolbar"><label class="search-wrap"><span>⌕</span><input id="search" type="search" placeholder="Search games..." autocomplete="off"></label><select id="category" aria-label="Filter by category"><option value="All">All categories</option></select></div>
+<div class="game-grid" id="games" aria-live="polite"></div><p class="footnote">Catalogue entries are informational. Download links appear only for packages authorized for distribution.</p></section>
+</main>
+<footer><span class="brand small"><span class="brand-mark">P</span> PS<span class="accent">VAULT</span></span><span>Independent community project · Not affiliated with Sony</span><span id="cacheStatus">Offline cache ready</span></footer>
+</div><script src="./app.js" defer></script>
+</body></html>
