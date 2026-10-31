@@ -37,7 +37,16 @@ jobs:
           sed -i -E 's/cmake_minimum_required\(VERSION [0-9.]+\)/cmake_minimum_required(VERSION 3.5)/I' \
             "$HOME/SDL-PS4/CMakeLists.txt" "$HOME/SDL-PS4/cmake/openorbis.cmake"
           sed -i 's/-Werror=declaration-after-statement/-Wno-error=declaration-after-statement/' "$HOME/SDL-PS4/CMakeLists.txt"
-          cmake --toolchain ../cmake/openorbis.cmake -DCMAKE_C_STANDARD=99 -DCMAKE_C_STANDARD_REQUIRED=ON -DCMAKE_C_EXTENSIONS=ON ..
+          CLANG="$(find "$OO_PS4_TOOLCHAIN" -type f -name clang -print -quit)"
+          CLANGXX="$(find "$OO_PS4_TOOLCHAIN" -type f -name clang++ -print -quit)"
+          LLVM_AR="$(find "$OO_PS4_TOOLCHAIN" -type f -name llvm-ar -print -quit)"
+          LLVM_RANLIB="$(find "$OO_PS4_TOOLCHAIN" -type f -name llvm-ranlib -print -quit)"
+          LLVM_LINKER="$(find "$OO_PS4_TOOLCHAIN" -type f -name ld.lld -print -quit)"
+          test -n "$CLANG" && test -n "$CLANGXX" && test -n "$LLVM_AR" && test -n "$LLVM_RANLIB" && test -n "$LLVM_LINKER"
+          cmake --toolchain ../cmake/openorbis.cmake \
+            -DCMAKE_C_COMPILER="$CLANG" -DCMAKE_CXX_COMPILER="$CLANGXX" \
+            -DCMAKE_AR="$LLVM_AR" -DCMAKE_RANLIB="$LLVM_RANLIB" -DCMAKE_LINKER="$LLVM_LINKER" \
+            -DCMAKE_C_STANDARD=99 -DCMAKE_C_STANDARD_REQUIRED=ON -DCMAKE_C_EXTENSIONS=ON ..
           make -j2
           cp libSDL2.a "$OO_PS4_TOOLCHAIN/lib/libSDL2.a"
           mkdir -p "$OO_PS4_TOOLCHAIN/include/SDL2"
