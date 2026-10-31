@@ -1,26 +1,50 @@
 name: PSVault Build
-
 on:
-  workflow_dispatch:
   push:
     branches: [main]
-
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build PS4 application
-        uses: OpenOrbis/toolchain-action@main
-        with:
-          version: v0.5.1
-          command: cd hello_world && make && PkgTool.Core pkg_build pkg/pkg.gp4 .
-
-      - name: Upload PKG
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make curl libicu-dev clang lld python3
+      - name: Install libssl1.1 for PkgTool.Core
+        run: |
+          base="http://security.ubuntu.com/ubuntu/pool/main/o/openssl/"
+          ver="$(curl -fsSL "$base" | grep -oE 'libssl1\.1_1\.1\.1f-[0-9a-z.~+]+_amd64\.deb' | sed -E 's/^libssl1\.1_(.*)_amd64\.deb$/\1/' | sort -V | tail -1)"
+          test -n "$ver"
+          curl -fsSL -o libssl1.1.deb "${base}libssl1.1_${ver}_amd64.deb"
+          sudo dpkg -i libssl1.1.deb || sudo apt-get install -f -y
+      - name: Install OpenOrbis toolchain
+        run: |
+          curl -fsSL https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz -o oo.tar.gz
+          mkdir -p "$HOME/oo"
+          tar -xzf oo.tar.gz -C "$HOME/oo"
+          OO_ROOT="$(dirname "$(find "$HOME/oo" -name link.x -print -quit)")"
+          test -f "$OO_ROOT/link.x"
+          echo "OO_PS4_TOOLCHAIN=$OO_ROOT" >> "$GITHUB_ENV"
+      - name: Stage required system module
+        run: |
+          mkdir -p sce_sys/about
+          RS="$(find "$OO_PS4_TOOLCHAIN" -name right.sprx -print -quit)"
+          test -n "$RS"
+          cp "$RS" sce_sys/about/right.sprx
+      - name: Build PSVault
+        run: |
+          CLANG="$(find "$OO_PS4_TOOLCHAIN" -type f -name clang -print -quit)"
+          CLANGXX="$(find "$OO_PS4_TOOLCHAIN" -type f -name clang++ -print -quit)"
+          LLD="$(find "$OO_PS4_TOOLCHAIN" -type f -name ld.lld -print -quit)"
+          make CC="${CLANG:-clang}" CXX="${CLANGXX:-clang++}" LD="${LLD:-ld.lld}"
+      - name: Upload PSVault package
         uses: actions/upload-artifact@v4
         with:
           name: PSVault-PKG
-          path: hello_world/*.pkg
+          path: |
+            *.pkg
+            eboot.bin
+          if-no-files-found: error
+          retention-days: 30
